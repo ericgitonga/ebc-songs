@@ -1,0 +1,69 @@
+name: E2E (Preview)
+
+# Gates a PR on the golden-path E2E suite running against the Preview
+# schema of the single shared Supabase project — never the Production
+# schema. Requires a VERCEL_TOKEN repository secret (Vercel dashboard ->
+# Account Settings -> Tokens) with access to the ericgitonga/ebc-songs
+# project; org/project IDs below are plain identifiers (same ones in the
+# gitignored .vercel/project.json), not secrets.
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  VERCEL_ORG_ID: REPLACE_WITH_VERCEL_ORG_ID
+  VERCEL_PROJECT_ID: REPLACE_WITH_VERCEL_PROJECT_ID
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Pull Preview/Development env vars (never Production)
+        run: npx vercel env pull .env.local --environment=preview --token=${{ secrets.VERCEL_TOKEN }} --yes
+
+      - name: Apply pending migrations to the Preview/dev database
+        run: npx prisma migrate deploy
+
+      - run: npm run build
+
+      - name: Start server
+        # Output redirected to a file rather than left to inherit the step's
+        # own stdout: GitHub Actions stops capturing a backgrounded (`&`)
+        # process's output once the step that launched it exits (confirmed
+        # directly — server-side console.log calls from later requests
+        # never appeared in any step's log, even in test runs where those
+        # server actions definitely ran). "Print server log" below cats
+        # this file so it's actually visible regardless of outcome.
+        run: |
+          npm run start > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/login > /dev/null && exit 0
+            sleep 1
+          done
+          echo "Server did not become ready in time" >&2
+          exit 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Playwright (Python)
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Run E2E suite
+        run: python e2e/run.py
+
+      - name: Print server log
+        if: always()
+        run: cat /tmp/server.log

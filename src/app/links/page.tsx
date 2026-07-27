@@ -1,0 +1,61 @@
+import Link from "next/link";
+import { getSession } from "@/lib/get-session";
+import { prisma } from "@/lib/prisma";
+import { LINK_CATEGORIES, type LinkCategory } from "@/lib/constants";
+
+// This page reads live, admin-editable data — never statically cache it.
+export const dynamic = "force-dynamic";
+
+const CATEGORY_TEXT: Record<LinkCategory, string> = {
+  social: "Social Media",
+  news: "News",
+  media: "Media / Press",
+  other: "Other",
+};
+
+export default async function LinksPage() {
+  const session = await getSession();
+  const isAdmin = session?.user.role === "admin";
+
+  const links = await prisma.externalLink.findMany({ orderBy: { sortOrder: "asc" } });
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-ink">Links</h1>
+        {isAdmin && (
+          <Link
+            href="/admin/links"
+            className="rounded border border-ink/20 px-3 py-1.5 text-sm text-ink hover:bg-ink/5"
+          >
+            Edit
+          </Link>
+        )}
+      </div>
+      {LINK_CATEGORIES.map((category) => {
+        const items = links.filter((l) => l.category === category);
+        if (items.length === 0) return null;
+        return (
+          <section key={category} className="mb-8">
+            <h2 className="mb-3 text-lg font-semibold text-ink">{CATEGORY_TEXT[category]}</h2>
+            <ul className="flex flex-col gap-2">
+              {items.map((link) => (
+                <li key={link.id}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-ink hover:underline"
+                  >
+                    {link.title} ↗
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+      {links.length === 0 && <p className="text-ink/50">No links yet.</p>}
+    </div>
+  );
+}

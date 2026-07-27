@@ -1,0 +1,245 @@
+// EBC Music — choir management app
+//
+// Enum-like fields are plain String columns, not Prisma `enum` — the app
+// started on SQLite (no native enum type) and kept the same shape after
+// moving to Postgres (which does support native enums) so the swap needed
+// no schema rewrite. Allowed values are documented next to each field and
+// enforced at the application layer (see src/lib/validation.ts).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Profile table for a Supabase Auth user (auth.users) — Supabase owns
+// identity/password/session entirely; this table only carries app-level
+// data (role, status, display name) keyed by authUserId. Prisma remains the
+// only way the app talks to Postgres for business data; we don't use
+// Supabase's PostgREST/RLS layer.
+model User {
+  id          String  @id @default(cuid())
+  authUserId  String? @unique
+  email       String  @unique
+  name        String
+  // "admin" | "chorister"
+  role        String  @default("chorister")
+  // "invited" | "active" | "disabled"
+  status      String  @default("invited")
+  calendarToken String?   @unique
+  photoUrl      String?
+  bio           String?
+  // "S" | "A" | "T" | "B" — see VOICE_PARTS in src/lib/constants.ts
+  voicePart     String?
+  instrument    String?
+  phone         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  songsCreated  Song[]
+  tripsCreated  Trip[]
+}
+
+model Song {
+  id          String   @id @default(cuid())
+  title       String
+  composer    String?
+  lyricist    String?
+  arranger    String?
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sections      SongSection[]
+  lyricSections LyricSection[]
+  sheetMusic    SongSheetMusic[]
+}
+
+// A named voice-part grouping (e.g. "Tenor") that can hold multiple media
+// items (audio, video, ...) underneath it.
+model SongSection {
+  id     String @id @default(cuid())
+  songId String
+  song   Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
+  // "S" | "A" | "T" | "B" | "All"
+  part             String
+  sectionLabel     String
+  labelDescription String
+  sortOrder        Int    @default(0)
+
+  media SongMedia[]
+}
+
+model SongMedia {
+  id        String      @id @default(cuid())
+  sectionId String
+  section   SongSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  label     String
+  mediaUrl  String
+  // "audio" | "video" | "youtube" | "drive" | "soundcloud" | "direct_url"
+  mediaKind String
+  sortOrder Int         @default(0)
+}
+
+// PDF music scores (#38) — a flat per-song list, not grouped by voice part
+// like SongMedia/SongSection: sheet music is typically a full score or a
+// handful of parts, not per-voice recordings. Uploaded to the "song-sheet-music"
+// Storage bucket (src/lib/sheet-music-storage.ts), counted toward the same
+// project-wide storage budget shown on the admin Storage page.
+model SongSheetMusic {
+  id        String   @id @default(cuid())
+  songId    String
+  song      Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  label     String
+  fileUrl   String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model LyricSection {
+  id           String @id @default(cuid())
+  songId       String
+  song         Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
+  // "verse" | "chorus" | "bridge" | "intro" | "outro" | "vamp" | "custom"
+  sectionType  String
+  sectionLabel String
+  content      String
+  // comma-separated subset of "S" | "A" | "T" | "B" | "SATB" — no array type in SQLite
+  voiceTags    String @default("SATB")
+  sortOrder    Int    @default(0)
+}
+
+model ExternalLink {
+  id        String @id @default(cuid())
+  title     String
+  url       String
+  // "social" | "news" | "media" | "other"
+  category  String
+  sortOrder Int    @default(0)
+}
+
+model Trip {
+  id            String   @id @default(cuid())
+  title         String
+  destination   String
+  startDate     DateTime
+  endDate       DateTime
+  // "upcoming" | "past"
+  status        String   @default("upcoming")
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+
+  deadlines        LogisticsDeadline[]
+  itineraryItems   ItineraryItem[]
+  practiceSessions PracticeSession[]
+}
+
+model LogisticsDeadline {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  // "visa" | "tickets" | "payment" | "other"
+  category  String
+  label     String
+  dueDate   DateTime
+  notes     String?
+  sortOrder Int      @default(0)
+}
+
+model ItineraryItem {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  date      DateTime
+  time      String?
+  title     String
+  location  String?
+  notes     String?
+  sortOrder Int      @default(0)
+}
+
+model PracticeSession {
+  id        String   @id @default(cuid())
+  tripId    String?
+  trip      Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  date      DateTime
+  time      String
+  location  String
+  notes     String?
+  sortOrder Int      @default(0)
+}
+
+// Distributed rate-limit state (#20) — replaces the old per-process in-memory
+// Map so counters are shared across serverless instances. Rows are written
+// via a raw atomic INSERT ... ON CONFLICT in src/lib/rate-limit.ts, not
+// through Prisma's high-level query API, since the increment-or-reset logic
+// needs to happen in a single round-trip to avoid a race between concurrent
+// requests for the same key.
+model RateLimitBucket {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+}
+
+// The public About page's admin-editable text (#59) — a flat, ordered list
+// of title+body blocks replacing what used to be hardcoded JSX in
+// src/app/about/page.tsx. `title` is nullable since the original intro
+// paragraph has no heading. No reordering UI — append-only via `sortOrder`,
+// matching ExternalLink's own simplicity — but unlike links, sections are
+// editable in place since #59 is specifically about not having to re-file
+// an issue to change existing wording.
+model AboutPageSection {
+  id        String   @id @default(cuid())
+  title     String?
+  body      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// The public About page's media items (#59) — replaces the old singleton
+// AboutPageVideo (#55) with a flat, unordered-by-voice-part list mirroring
+// SongMedia's paste-link-or-upload behavior, since the About page has no
+// voice-part concept to group by. `mediaKind` uses the same MEDIA_KINDS set
+// (src/lib/constants.ts) SongMedia already does.
+model AboutPageMedia {
+  id        String   @id @default(cuid())
+  label     String
+  mediaUrl  String
+  mediaKind String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// Activity/audit log. Started as a narrow proof-of-concept slice at #50
+// (login events + a handful of high-value admin mutations); broadened at
+// #49 into the app's data-change trail (song edits, member status/
+// deletion, logistics creates/deletes) plus request context (IP address,
+// raw User-Agent — browser/OS are parsed from it at render time, not
+// stored separately), sharing this one table rather than a second,
+// near-duplicate one. userLabel is a snapshot of the actor's name/email at
+// the time of the action, not a live FK to User — an audit-style log
+// should stay meaningful and immutable even after the user who did
+// something is later deleted. ipAddress/userAgent/entityType/entityLabel
+// are nullable since rows logged before #49 (and any future best-effort
+// logging failure) won't have them.
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userLabel   String
+  // one of ACTIVITY_ACTIONS in src/lib/constants.ts
+  action      String
+  detail      String?
+  // e.g. "Song" | "Member" | "Trip" | "LogisticsDeadline" | "ItineraryItem" | "PracticeSession"
+  entityType  String?
+  // human-readable snapshot of the affected record — e.g. the song title
+  entityLabel String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}

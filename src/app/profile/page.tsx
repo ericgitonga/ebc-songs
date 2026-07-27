@@ -1,0 +1,23 @@
+import { getSession } from "@/lib/get-session";
+import { prisma } from "@/lib/prisma";
+import ProfileForm from "./ProfileForm";
+
+export default async function ProfilePage() {
+  const session = await getSession();
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: session!.user.id } });
+
+  return (
+    <div className="mx-auto max-w-sm px-4 py-10">
+      <h1 className="mb-6 text-2xl font-semibold text-ink">Profile</h1>
+      <ProfileForm
+        name={user.name}
+        email={user.email}
+        bio={user.bio}
+        voicePart={user.voicePart}
+        instrument={user.instrument}
+        phone={user.phone}
+        photoUrl={user.photoUrl}
+      />
+    </div>
+  );
+}
