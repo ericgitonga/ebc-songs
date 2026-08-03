@@ -33,7 +33,13 @@ function buildCsp(nonce: string): string {
     // understand 'strict-dynamic' yet (both per Next's documented pattern).
     // 'unsafe-eval' is dev-only (React's debug tooling uses eval() to
     // reconstruct stack traces in development; it never runs in production).
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    // va.vercel-scripts.com covers @vercel/analytics + @vercel/speed-insights
+    // (#1): in production both load from same-origin /_vercel/... paths
+    // (already covered by 'self'), but the dev-mode debug build always
+    // loads cross-origin from va.vercel-scripts.com regardless of NODE_ENV
+    // checks happening client-side — explicit here rather than relying on
+    // 'strict-dynamic' alone, since that only covers browsers that honor it.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://va.vercel-scripts.com${isDev ? " 'unsafe-eval'" : ""}`,
     // Dev-mode Fast Refresh injects styles without nonce support (per
     // Next's own documented dev/production split for this exact directive)
     // — production gets the real nonce-based restriction.
@@ -55,7 +61,11 @@ function buildCsp(nonce: string): string {
     // Storage uploads (#63) both need to reach the project's own API —
     // without this, every call is silently blocked by the browser with
     // only a devtools CSP violation to go on.
-    `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL}`,
+    // va.vercel-scripts.com added alongside script-src above (#1) — the
+    // dev-mode debug build of @vercel/analytics / @vercel/speed-insights
+    // reports from that origin; production's default same-origin
+    // /_vercel/... paths are already covered by 'self'.
+    `connect-src 'self' https://va.vercel-scripts.com ${process.env.NEXT_PUBLIC_SUPABASE_URL}`,
     // Uploaded audio/video (#36, #63) plays from Supabase Storage's public
     // URL — same domain as connect-src above. Without this, default-src
     // 'self' silently blocks <audio>/<video> tags with only a devtools CSP
