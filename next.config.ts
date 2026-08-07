@@ -9,7 +9,7 @@ const SECURITY_HEADERS = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   // Vercel terminates TLS and redirects http->https at the edge, so this is
-  // defense-in-depth rather than a gap fix — but it's a free addition with
+  // defence-in-depth rather than a gap fix — but it's a free addition with
   // no functional downside, so no reason not to send it (#45 audit refresh).
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
 ];

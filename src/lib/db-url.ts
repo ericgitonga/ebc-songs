@@ -21,7 +21,7 @@ export function stripSslMode(connectionString: string): string {
  * Supabase project, split by Postgres schema, selected via `?schema=` on
  * DATABASE_URL/DIRECT_URL. Prisma's own migrate engine reads that query
  * param natively, but `@prisma/adapter-pg`'s runtime driver adapter hands
- * the connection string straight to `pg`, which does not recognize
+ * the connection string straight to `pg`, which does not recognise
  * `schema` at all — so it must be extracted here instead and applied two
  * ways: passed as PrismaPg's own `{ schema }` option (covers Prisma
  * Client's generated model queries) AND turned into a `search_path` via
