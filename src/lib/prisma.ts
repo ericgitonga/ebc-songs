@@ -24,7 +24,7 @@ if (!rawConnectionString) {
 // `sslmode` must be stripped from the connection string for our explicit
 // `ssl` option to actually take effect. The `schema` query param (selects
 // `public` vs `preview` — see .env.example) also needs pulling out
-// explicitly: `pg` itself doesn't recognize `schema` as a connection
+// explicitly: `pg` itself doesn't recognise `schema` as a connection
 // param, unlike Prisma's migrate engine, so it's applied both as PrismaPg's
 // own `schema` option and as a real Postgres `search_path` via `options`
 // (the latter is what makes hand-written raw SQL, e.g. rate-limit.ts,

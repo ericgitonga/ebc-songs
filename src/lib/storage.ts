@@ -47,7 +47,7 @@ const EXTENSION_EXPECTED_FORMAT: Record<string, SniffedAudioFormat> = {
  * Identifies the actual container/frame format from the file's own leading
  * bytes — a browser's reported `File.type` for a local file is derived from
  * its extension, not its content, so it can't be trusted to catch a
- * mislabeled file (see the .mp3-that's-really-AAC/MP4 case this guards
+ * mislabelled file (see the .mp3-that's-really-AAC/MP4 case this guards
  * against). 12 bytes is enough to identify every format below. Takes raw
  * bytes rather than a `File` (#63) — the actual file content now arrives via
  * a post-upload ranged fetch (see verifyUploadedAudioFile) rather than a
@@ -113,9 +113,9 @@ export async function createAudioUploadTicket(
  * real content — the equivalent of the old pre-upload sniff check, moved
  * here because the file's bytes no longer reach this server before the
  * upload happens (#63). Deletes the object and returns the same error as
- * before on a mismatch, so a mislabeled file never lingers in Storage.
+ * before on a mismatch, so a mislabelled file never lingers in Storage.
  * No-ops (returns no error) for anything that isn't one of our own audio
- * files with a recognized extension — nothing for this check to do there.
+ * files with a recognised extension — nothing for this check to do there.
  */
 export async function verifyUploadedAudioFile(url: string): Promise<{ error?: string }> {
   const path = storagePathFromUrl(url);
@@ -137,7 +137,7 @@ export async function verifyUploadedAudioFile(url: string): Promise<{ error?: st
       error:
         ext === "mp3" && sniffed === "mp4"
           ? "This file's actual content is AAC/MP4 audio, not MP3 — common with files downloaded from YouTube without converting them. Re-export it as a real MP3 (e.g. via Audacity) and upload that instead."
-          : `This file's content doesn't look like a real .${ext} file — it may be mislabeled or corrupted.`,
+          : `This file's content doesn't look like a real .${ext} file — it may be mislabelled or corrupted.`,
     };
   }
 

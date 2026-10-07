@@ -26,7 +26,7 @@ const serwist = new Serwist({
     // adds a media item, the page re-fetches via Next's RSC refresh, and SWR
     // served the *pre*-mutation cached copy since a background revalidation
     // fetch updates the cache for next time, not the in-flight response.
-    // network-first tries the network first (identical to today's behavior
+    // network-first tries the network first (identical to today's behaviour
     // whenever online) and only falls back to cache on a genuine network
     // failure — exactly the offline-while-touring case, with no staleness
     // risk during normal same-session use. Mirrors @serwist/next's own
